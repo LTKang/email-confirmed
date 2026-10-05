@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyBakery Staff Setup</title>
+    <title>MyBakery Authentication</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -19,22 +19,31 @@
 </head>
 <body>
 
+<!-- Loading Screen with Safety Fallback -->
 <div class="card" id="loading-card">
     <h2>Loading...</h2>
-    <p>Please wait...</p>
+    <p>Please wait while we verify your request.</p>
 </div>
 
+<!-- Customer Success Card -->
+<div class="card hidden" id="customer-card">
+    <h2>Email Verified!</h2>
+    <p>Your account has been successfully confirmed. You can now return to the <strong>MyBakery</strong> app to log in.</p>
+</div>
+
+<!-- Staff Password Creation Card -->
 <div class="card hidden" id="password-card">
-    <h2>Create Staff Password</h2>
-    <p>Set your permanent password to access MyBakery.</p>
+    <h2>Create Your Password</h2>
+    <p>Welcome to MyBakery! Please set your new password below.</p>
     <input type="password" id="new-password" placeholder="Enter new password (min 6 chars)" required>
-    <button onclick="updatePassword()">Save Password</button>
+    <button onclick="updatePassword()">Save Password & Login</button>
     <div id="error-msg" class="error"></div>
 </div>
 
+<!-- Password Saved Success Card -->
 <div class="card hidden" id="success-card">
     <h2>Password Saved!</h2>
-    <p>Your password has been successfully created. You can now log into the MyBakery app.</p>
+    <p>Your password has been successfully created. You can now log into your MyBakery app.</p>
 </div>
 
 <script>
@@ -44,24 +53,55 @@
 
     window.addEventListener('DOMContentLoaded', async () => {
         const loadingCard = document.getElementById('loading-card');
+        const customerCard = document.getElementById('customer-card');
         const passwordCard = document.getElementById('password-card');
+
+        // SAFETY TIMER: If anything takes more than 6 seconds, show an error instead of freezing
+        const safetyTimeout = setTimeout(() => {
+            if (!passwordCard.classList.contains('hidden') || !customerCard.classList.contains('hidden')) return;
+            loadingCard.innerHTML = `<h2>Link Expired</h2><p style="color: #dc2626;">The verification took too long or the link is invalid.</p>`;
+        }, 6000);
 
         try {
             const urlParams = new URLSearchParams(window.location.search);
+            const tokenHash = urlParams.get('token_hash');
             const code = urlParams.get('code');
+            const type = urlParams.get('type');
 
-            if (code) {
+            if (tokenHash) {
+                // Staff invite cross-device safe verification
+                const { error } = await supabase.auth.verifyOtp({
+                    token_hash: tokenHash,
+                    type: type || 'invite'
+                });
+                if (error) throw error;
+            } else if (code) {
+                // Standard PKCE code exchange
                 const { error } = await supabase.auth.exchangeCodeForSession(code);
                 if (error) throw error;
-            } else {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) throw new Error("Invalid link.");
             }
 
-            loadingCard.classList.add('hidden');
-            passwordCard.classList.remove('hidden');
+            clearTimeout(safetyTimeout);
+
+            // Check if it's a customer signup confirmation
+            if (type === 'signup') {
+                loadingCard.classList.add('hidden');
+                customerCard.classList.remove('hidden');
+            } else {
+                // Check if session is active (Staff flow)
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    loadingCard.classList.add('hidden');
+                    passwordCard.classList.remove('hidden');
+                } else {
+                    // Fallback to customer view if no session found
+                    loadingCard.classList.add('hidden');
+                    customerCard.classList.remove('hidden');
+                }
+            }
         } catch (err) {
-            loadingCard.innerHTML = `<h2>Error</h2><p style="color: #dc2626;">Invalid or expired link.</p>`;
+            clearTimeout(safetyTimeout);
+            loadingCard.innerHTML = `<h2>Verification Error</h2><p style="color: #dc2626;">${err.message || 'Invalid or expired link.'}</p>`;
         }
     });
 
@@ -71,7 +111,7 @@
         errorMsg.textContent = '';
 
         if (!password || password.length < 6) {
-            errorMsg.textContent = 'Password must be at least 6 characters.';
+            errorMsg.textContent = 'Password must be at least 6 characters long.';
             return;
         }
 
