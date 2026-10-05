@@ -40,41 +40,43 @@
         const card = document.getElementById('message-card');
         const passwordCard = document.getElementById('password-card');
 
-        const params = new URLSearchParams(window.location.search);
-        const type = params.get('type');
-        const code = params.get('code');
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const type = params.get('type');
 
-        // Listen to auth state changes
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'PASSWORD_RECOVERY' || type === 'recovery' || type === 'invite') {
-                card.classList.add('hidden');
-                passwordCard.classList.remove('hidden');
-            } else if (event === 'SIGNED_IN' || type === 'signup') {
-                card.innerHTML = `
-                    <h2>Email Verified!</h2>
-                    <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
-                `;
+            // Explicitly exchange the PKCE code for a session
+            if (code) {
+                const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+                if (error) throw error;
             }
-        });
 
-        // Check if session already established
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-            if (type === 'recovery' || type === 'invite' || window.location.href.includes('recovery')) {
-                card.classList.add('hidden');
-                passwordCard.classList.remove('hidden');
+            // Get the active session after exchange
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) throw sessionError;
+
+            if (session) {
+                // If it's a customer signup confirmation
+                if (type === 'signup') {
+                    card.innerHTML = `
+                        <h2>Email Verified!</h2>
+                        <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
+                    `;
+                } else {
+                    // Staff invite / password setup flow
+                    card.classList.add('hidden');
+                    passwordCard.classList.remove('hidden');
+                }
             } else {
                 card.innerHTML = `
-                    <h2>Email Verified!</h2>
-                    <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
+                    <h2>Invalid or Expired Link</h2>
+                    <p>Please request a new link from the admin portal.</p>
                 `;
             }
-        } else if (!code && !window.location.hash.includes('access_token')) {
-            // Fallback if someone visits the link directly without parameters
+        } catch (err) {
             card.innerHTML = `
-                <h2>MyBakery Portal</h2>
-                <p>Please use the valid link provided in your email.</p>
+                <h2>Verification Error</h2>
+                <p>${err.message || 'Could not verify your request.'}</p>
             `;
         }
     });
