@@ -31,7 +31,6 @@
 </div>
 
 <script>
-    // REPLACE THESE WITH YOUR ACTUAL SUPABASE URL AND ANON KEY
     const SUPABASE_URL = 'https://lughbjwjjzzcpiwgzddr.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_YQ4XOpDfWkoWnxHmysKvhg_TzAhhKLT';
 
@@ -41,17 +40,16 @@
         const card = document.getElementById('message-card');
         const passwordCard = document.getElementById('password-card');
 
-        // Check hash or URL parameters for recovery/invite type
-        const hash = window.location.hash;
-        
-        // Listen to auth state changes to catch the session established from the link
+        const params = new URLSearchParams(window.location.search);
+        const type = params.get('type');
+        const code = params.get('code');
+
+        // Listen to auth state changes
         supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'PASSWORD_RECOVERY') {
-                // Staff invite / password reset flow -> Show password creation form
+            if (event === 'PASSWORD_RECOVERY' || type === 'recovery' || type === 'invite') {
                 card.classList.add('hidden');
                 passwordCard.classList.remove('hidden');
-            } else if (event === 'SIGNED_IN' || hash.includes('type=signup')) {
-                // Customer signup confirmation flow -> Show success message
+            } else if (event === 'SIGNED_IN' || type === 'signup') {
                 card.innerHTML = `
                     <h2>Email Verified!</h2>
                     <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
@@ -59,11 +57,25 @@
             }
         });
 
-        // Fallback check if session is already present
+        // Check if session already established
         const { data: { session } } = await supabase.auth.getSession();
-        if (session && window.location.href.includes('type=recovery')) {
-            card.classList.add('hidden');
-            passwordCard.classList.remove('hidden');
+        
+        if (session) {
+            if (type === 'recovery' || type === 'invite' || window.location.href.includes('recovery')) {
+                card.classList.add('hidden');
+                passwordCard.classList.remove('hidden');
+            } else {
+                card.innerHTML = `
+                    <h2>Email Verified!</h2>
+                    <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
+                `;
+            }
+        } else if (!code && !window.location.hash.includes('access_token')) {
+            // Fallback if someone visits the link directly without parameters
+            card.innerHTML = `
+                <h2>MyBakery Portal</h2>
+                <p>Please use the valid link provided in your email.</p>
+            `;
         }
     });
 
@@ -79,7 +91,7 @@
             alert('Error: ' + error.message);
         } else {
             alert('Password created successfully! You can now log into your app.');
-            window.location.href = 'https://ltkang.github.io/email-confirmed/'; // or close page
+            window.location.href = 'https://ltkang.github.io/email-confirmed/';
         }
     }
 </script>
