@@ -45,25 +45,23 @@
             const code = params.get('code');
             const type = params.get('type');
 
-            // Explicitly exchange the PKCE code for a session
+            // Pass the extracted code string correctly
             if (code) {
-                const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+                const { error } = await supabase.auth.exchangeCodeForSession(code);
                 if (error) throw error;
             }
 
-            // Get the active session after exchange
+            // Get session
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError) throw sessionError;
 
             if (session) {
-                // If it's a customer signup confirmation
                 if (type === 'signup') {
                     card.innerHTML = `
                         <h2>Email Verified!</h2>
                         <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
                     `;
                 } else {
-                    // Staff invite / password setup flow
                     card.classList.add('hidden');
                     passwordCard.classList.remove('hidden');
                 }
