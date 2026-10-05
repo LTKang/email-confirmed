@@ -1,12 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Account Verified</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyBakery Authentication</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        h2 { color: #1e293b; }
+        p { color: #64748b; font-size: 14px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #d97706; color: white; border: none; padding: 10px; width: 100%; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        button:hover { background-color: #b45309; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-  <h2>Email Verified!</h2>
-  <p>Your account has been successfully confirmed. You can now return to the <strong>MyBakery</strong> app to log in.</p>
+
+<div class="card" id="message-card">
+    <h2>Loading...</h2>
+    <p>Please wait while we verify your request.</p>
+</div>
+
+<div class="card hidden" id="password-card">
+    <h2>Create Your Password</h2>
+    <p>Welcome to MyBakery! Please set your new password below.</p>
+    <input type="password" id="new-password" placeholder="Enter new password" required>
+    <button onclick="updatePassword()">Save Password & Login</button>
+</div>
+
+<script>
+    // REPLACE THESE WITH YOUR ACTUAL SUPABASE URL AND ANON KEY
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    window.addEventListener('load', async () => {
+        const card = document.getElementById('message-card');
+        const passwordCard = document.getElementById('password-card');
+
+        // Check hash or URL parameters for recovery/invite type
+        const hash = window.location.hash;
+        
+        // Listen to auth state changes to catch the session established from the link
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                // Staff invite / password reset flow -> Show password creation form
+                card.classList.add('hidden');
+                passwordCard.classList.remove('hidden');
+            } else if (event === 'SIGNED_IN' || hash.includes('type=signup')) {
+                // Customer signup confirmation flow -> Show success message
+                card.innerHTML = `
+                    <h2>Email Verified!</h2>
+                    <p>Your account has been successfully confirmed. You can now return to the MyBakery app to log in.</p>
+                `;
+            }
+        });
+
+        // Fallback check if session is already present
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && window.location.href.includes('type=recovery')) {
+            card.classList.add('hidden');
+            passwordCard.classList.remove('hidden');
+        }
+    });
+
+    async function updatePassword() {
+        const password = document.getElementById('new-password').value;
+        if (!password || password.length < 6) {
+            alert('Password must be at least 6 characters long.');
+            return;
+        }
+
+        const { error } = await supabase.auth.updateUser({ password: password });
+        if (error) {
+            alert('Error: ' + error.message);
+        } else {
+            alert('Password created successfully! You can now log into your app.');
+            window.location.href = 'https://ltkang.github.io/email-confirmed/'; // or close page
+        }
+    }
+</script>
+
 </body>
 </html>
